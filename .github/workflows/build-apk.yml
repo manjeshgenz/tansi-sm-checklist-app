@@ -1,0 +1,64 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      start_url:
+        description: "App link baked into the APK (exec URL, Google Sites URL or short link). Blank = repo variable START_URL, else ask on first launch"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+
+      - name: Prepare signing key
+        env:
+          KS_B64: ${{ secrets.KS_B64 }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "KS_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "KS_PATH=$GITHUB_WORKSPACE/keystore/release.jks" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build signed APK
+        env:
+          KS_PASS_SECRET: ${{ secrets.KS_PASS }}
+          START_URL: ${{ inputs.start_url || vars.START_URL }}
+        run: |
+          if [ -n "$KS_PASS_SECRET" ]; then export KS_PASS="$KS_PASS_SECRET"; else export KS_PASS="$(tr -d '\r\n' < keystore/password.txt)"; fi
+          gradle --no-daemon assembleRelease -PversionCode=${{ github.run_number }} -PstartUrl="$START_URL"
+          mkdir -p out
+          cp app/build/outputs/apk/release/app-release.apk "out/TansiHonda-SM-Checklist-v2.0.${{ github.run_number }}.apk"
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TansiHonda-SM-Checklist-apk
+          path: out/*.apk
+
+      - name: Publish release (stable download link)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v2.0.${{ github.run_number }}" out/*.apk \
+            --title "SM Checklist v2.0.${{ github.run_number }}" \
+            --notes "Android app for Tansi Honda Sales Manager Checklist. Install on each manager's phone." --latest

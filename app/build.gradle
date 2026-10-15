@@ -1,0 +1,49 @@
+plugins {
+    id 'com.android.application'
+}
+
+def vCode = (project.findProperty('versionCode') ?: '1').toString().toInteger()
+def startUrl = (project.findProperty('startUrl') ?: '').toString().trim().replace('"', '')
+
+android {
+    namespace 'com.tansihonda.smchecklist'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.tansihonda.smchecklist'
+        minSdk 26
+        targetSdk 34
+        versionCode vCode
+        versionName "2.0.${vCode}"
+        buildConfigField 'String', 'START_URL', "\"${startUrl}\""
+    }
+
+    buildFeatures { buildConfig true }
+
+    signingConfigs {
+        release {
+            storeFile file(System.getenv('KS_PATH') ?: "${rootDir}/keystore/release.jks")
+            storePassword System.getenv('KS_PASS') ?: ''
+            keyAlias 'tansi'
+            keyPassword System.getenv('KS_PASS') ?: ''
+            enableV1Signing true
+            enableV2Signing true
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core:1.13.1'
+}
